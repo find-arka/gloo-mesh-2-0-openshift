@@ -13,28 +13,33 @@ source ./scripts/assert.sh
 
 
 ## Table of Contents
-* [Introduction](#introduction)
-* [Lab 1 - Deploy the Kubernetes clusters manually](#Lab-1)
-* [Lab 2 - Deploy Istio](#Lab-2)
-* [Lab 3 - Deploy the Bookinfo demo app](#Lab-3)
-* [Lab 4 - Deploy the httpbin demo app](#Lab-4)
-* [Lab 5 - Deploy and register Gloo Mesh](#Lab-5)
-* [Lab 6 - Create the gateways workspace](#Lab-6)
-* [Lab 7 - Create the bookinfo workspace](#Lab-7)
-* [Lab 8 - Expose the productpage through a gateway](#Lab-8)
-* [Lab 9 - Traffic policies](#Lab-9)
-* [Lab 10 - Create the Root Trust Policy](#Lab-10)
-* [Lab 11 - Multi-cluster Traffic](#Lab-11)
-* [Lab 12 - Leverage Virtual Destinations](#Lab-12)
-* [Lab 13 - Zero trust](#Lab-13)
-* [Lab 14 - Create the httpbin workspace](#Lab-14)
-* [Lab 15 - Expose an external service](#Lab-15)
-* [Lab 16 - Deploy Keycloak](#Lab-16)
-* [Lab 17 - Securing the access with OAuth](#Lab-17)
-* [Lab 18 - Use the JWT filter to create headers from claims](#Lab-18)
-* [Lab 19 - Use the transformation filter to manipulate headers](#Lab-19)
-* [Lab 20 - Apply rate limiting to the Gateway](#Lab-20)
-* [Lab 21 - Use the Web Application Firewall filter](#Lab-21)
+- [Gloo Mesh Workshop](#gloo-mesh-workshop)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction ](#introduction-)
+    - [Istio support](#istio-support)
+    - [Gloo Mesh overview](#gloo-mesh-overview)
+    - [Want to learn more about Gloo Mesh](#want-to-learn-more-about-gloo-mesh)
+  - [Lab 1 - Deploy the Kubernetes clusters manually ](#lab-1---deploy-the-kubernetes-clusters-manually-)
+  - [Lab 2 - Deploy Istio ](#lab-2---deploy-istio-)
+  - [Lab 3 - Deploy the Bookinfo demo app ](#lab-3---deploy-the-bookinfo-demo-app-)
+  - [Lab 4 - Deploy the httpbin demo app ](#lab-4---deploy-the-httpbin-demo-app-)
+  - [Lab 5 - Deploy and register Gloo Mesh ](#lab-5---deploy-and-register-gloo-mesh-)
+  - [Lab 6 - Create the gateways workspace ](#lab-6---create-the-gateways-workspace-)
+  - [Lab 7 - Create the bookinfo workspace ](#lab-7---create-the-bookinfo-workspace-)
+  - [Lab 8 - Expose the productpage through a gateway ](#lab-8---expose-the-productpage-through-a-gateway-)
+  - [Lab 9 - Traffic policies ](#lab-9---traffic-policies-)
+  - [Lab 10 - Create the Root Trust Policy ](#lab-10---create-the-root-trust-policy-)
+  - [Lab 11 - Multi-cluster Traffic ](#lab-11---multi-cluster-traffic-)
+  - [Lab 12 - Leverage Virtual Destinations ](#lab-12---leverage-virtual-destinations-)
+  - [Lab 13 - Zero trust ](#lab-13---zero-trust-)
+  - [Lab 14 - Create the httpbin workspace ](#lab-14---create-the-httpbin-workspace-)
+  - [Lab 15 - Expose an external service ](#lab-15---expose-an-external-service-)
+  - [Lab 16 - Deploy Keycloak ](#lab-16---deploy-keycloak-)
+  - [Lab 17 - Securing the access with OAuth ](#lab-17---securing-the-access-with-oauth-)
+  - [Lab 18 - Use the JWT filter to create headers from claims ](#lab-18---use-the-jwt-filter-to-create-headers-from-claims-)
+  - [Lab 19 - Use the transformation filter to manipulate headers ](#lab-19---use-the-transformation-filter-to-manipulate-headers-)
+  - [Lab 20 - Apply rate limiting to the Gateway ](#lab-20---apply-rate-limiting-to-the-gateway-)
+  - [Lab 21 - Use the Web Application Firewall filter ](#lab-21---use-the-web-application-firewall-filter-)
 
 
 
@@ -82,9 +87,9 @@ Clone this repository and go to the `gloo-mesh-2-0-openshift` directory.
 Set the context environment variables:
 
 ```bash
-export MGMT=mgmt
-export CLUSTER1=cluster1
-export CLUSTER2=cluster2
+export MGMT=drew-ocp-cluster3
+export CLUSTER1=drew-ocp-cluster1
+export CLUSTER2=drew-ocp-cluster2
 ```
 
 > Note that in case you can't have a Kubernetes cluster dedicated for the management plane, you would set the variables like that:
@@ -117,10 +122,15 @@ We are going to deploy Istio using Helm, but there are several other options. Yo
 Note that the few Openshift specific commands used in this lab are documented on the Istio website [here](https://istio.io/latest/docs/setup/platform-setup/openshift/).
 
 
-First of all, let's Download the Istio release 1.13.4:
+First of all, let's Download the Istio release ${ISTIO_VERSION}:
 
 ```bash
-export ISTIO_VERSION=1.13.4
+export ISTIO_VERSION=1.15.3
+export ISTIO_REVISION=1-15
+export ISTIO_MINOR_VERSION=1.15
+# SOLO IMAGE HUB for the Istio Version
+# https://support.solo.io/hc/en-us/articles/4414409064596
+export HUB="Please update based on above URL"
 curl -L https://istio.io/downloadIstio | sh -
 ```
 
@@ -151,7 +161,7 @@ Then, you need to create the `istio-system` and the `istio-gateways` namespaces 
 kubectl --context ${CLUSTER1} create ns istio-system
 kubectl --context ${CLUSTER1} create ns istio-gateways
 ```
-For Openshift clusters, you also need to run the following commands:
+For Openshift clusters, you also need to run the following commands to [grant access to the priviledged scc](https://istio.io/latest/docs/setup/platform-setup/openshift/)
 
 ```bash
 oc --context ${CLUSTER1} adm policy add-scc-to-group anyuid system:serviceaccounts:istio-system
@@ -161,19 +171,21 @@ oc --context ${CLUSTER1} adm policy add-scc-to-group anyuid system:serviceaccoun
 Now, let's deploy the Istio control plane on the first cluster:
 
 ```bash
-helm --kube-context=${CLUSTER1} upgrade --install istio-base ./istio-1.13.4/manifests/charts/base -n istio-system --set defaultRevision=1-13
+helm --kube-context=${CLUSTER1} upgrade --install istio-base ./istio-${ISTIO_VERSION}/manifests/charts/base -n istio-system --set defaultRevision=${ISTIO_REVISION}
 
-helm --kube-context=${CLUSTER1} upgrade --install istio-1.13.4 ./istio-1.13.4/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
-revision: 1-13
+helm --kube-context=${CLUSTER1} upgrade --install istio-${ISTIO_VERSION} ./istio-${ISTIO_VERSION}/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
+revision: ${ISTIO_REVISION}
 global:
   meshID: mesh1
   multiCluster:
-    clusterName: cluster1
+    clusterName: ${CLUSTER1}
   network: network1
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 meshConfig:
-  trustDomain: cluster1
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+  trustDomain: ${CLUSTER1}
   accessLogFile: /dev/stdout
   enableAutoMtls: true
   defaultConfig:
@@ -184,11 +196,13 @@ meshConfig:
     proxyMetadata:
       ISTIO_META_DNS_CAPTURE: "true"
       ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-      GLOO_MESH_CLUSTER_NAME: cluster1
+      GLOO_MESH_CLUSTER_NAME: ${CLUSTER1}
 pilot:
   env:
     PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
     PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+# ---------------- Reload cacerts when cert-manager changes it ----------------
+    AUTO_RELOAD_PLUGIN_CERTS: "true"
 istio_cni:
   enabled: true
 sidecarInjectorWebhook:
@@ -196,14 +210,18 @@ sidecarInjectorWebhook:
     k8s.v1.cni.cncf.io/networks: istio-cni
 EOF
 ```
-Install the Istio CNI helm chart:
 
 ```bash
-helm --kube-context=${CLUSTER1} upgrade --install istio-cni -n kube-system ./istio-1.13.4/manifests/charts/istio-cni --values - <<EOF
+kubectl --context ${CLUSTER1} -n istio-system \
+            rollout status deploy/istiod-${ISTIO_REVISION};
+```
 
+Install the Istio CNI helm chart:
+```bash
+helm --kube-context=${CLUSTER1} upgrade --install istio-cni -n kube-system ./istio-${ISTIO_VERSION}/manifests/charts/istio-cni --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 cni:
   excludeNamespaces:
     - istio-system
@@ -235,12 +253,12 @@ Note that we set the `trust domain` to be the same as the cluster name and we co
 After that, you can deploy the gateway(s):
 
 ```bash
-kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=1-13
+kubectl --context ${CLUSTER1} label namespace istio-gateways istio.io/rev=${ISTIO_REVISION}
 
-helm --kube-context=${CLUSTER1} upgrade --install istio-ingressgateway ./istio-1.13.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+helm --kube-context=${CLUSTER1} upgrade --install istio-ingressgateway ./istio-${ISTIO_VERSION}/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 gateways:
   istio-ingressgateway:
     name: istio-ingressgateway
@@ -257,10 +275,10 @@ gateways:
       targetPort: 8443
 EOF
 
-helm --kube-context=${CLUSTER1} upgrade --install istio-eastwestgateway ./istio-1.13.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+helm --kube-context=${CLUSTER1} upgrade --install istio-eastwestgateway ./istio-${ISTIO_VERSION}/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 gateways:
   istio-ingressgateway:
     name: istio-eastwestgateway
@@ -323,19 +341,21 @@ oc --context ${CLUSTER2} adm policy add-scc-to-group anyuid system:serviceaccoun
 Now, let's deploy the Istio control plane on the second cluster:
 
 ```bash
-helm --kube-context=${CLUSTER2} upgrade --install istio-base ./istio-1.13.4/manifests/charts/base -n istio-system --set defaultRevision=1-13
+helm --kube-context=${CLUSTER2} upgrade --install istio-base ./istio-${ISTIO_VERSION}/manifests/charts/base -n istio-system --set defaultRevision=${ISTIO_REVISION}
 
-helm --kube-context=${CLUSTER2} upgrade --install istio-1.13.4 ./istio-1.13.4/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
-revision: 1-13
+helm --kube-context=${CLUSTER2} upgrade --install istio-${ISTIO_VERSION} ./istio-${ISTIO_VERSION}/manifests/charts/istio-control/istio-discovery -n istio-system --values - <<EOF
+revision: ${ISTIO_REVISION}
 global:
   meshID: mesh1
   multiCluster:
-    clusterName: cluster2
+    clusterName: ${CLUSTER2}
   network: network1
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 meshConfig:
-  trustDomain: cluster2
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+  trustDomain: ${CLUSTER2}
   accessLogFile: /dev/stdout
   enableAutoMtls: true
   defaultConfig:
@@ -346,11 +366,13 @@ meshConfig:
     proxyMetadata:
       ISTIO_META_DNS_CAPTURE: "true"
       ISTIO_META_DNS_AUTO_ALLOCATE: "true"
-      GLOO_MESH_CLUSTER_NAME: cluster2
+      GLOO_MESH_CLUSTER_NAME: ${CLUSTER2}
 pilot:
   env:
     PILOT_ENABLE_K8S_SELECT_WORKLOAD_ENTRIES: "false"
     PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+# ---------------- Reload cacerts when cert-manager changes it ----------------
+    AUTO_RELOAD_PLUGIN_CERTS: "true"
 istio_cni:
   enabled: true
 sidecarInjectorWebhook:
@@ -361,11 +383,10 @@ EOF
 Install the Istio CNI helm chart:
 
 ```bash
-helm --kube-context=${CLUSTER2} upgrade --install istio-cni -n kube-system ./istio-1.13.4/manifests/charts/istio-cni --values - <<EOF
-
+helm --kube-context=${CLUSTER2} upgrade --install istio-cni -n kube-system ./istio-${ISTIO_VERSION}/manifests/charts/istio-cni --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 cni:
   excludeNamespaces:
     - istio-system
@@ -395,12 +416,12 @@ EOF
 After that, you can deploy the gateways:
 
 ```bash
-kubectl --context ${CLUSTER2} label namespace istio-gateways istio.io/rev=1-13
+kubectl --context ${CLUSTER2} label namespace istio-gateways istio.io/rev=${ISTIO_REVISION}
 
-helm --kube-context=${CLUSTER2} upgrade --install istio-ingressgateway ./istio-1.13.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+helm --kube-context=${CLUSTER2} upgrade --install istio-ingressgateway ./istio-${ISTIO_VERSION}/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 gateways:
   istio-ingressgateway:
     name: istio-ingressgateway
@@ -417,10 +438,10 @@ gateways:
       targetPort: 8443
 EOF
 
-helm --kube-context=${CLUSTER2} upgrade --install istio-eastwestgateway ./istio-1.13.4/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
+helm --kube-context=${CLUSTER2} upgrade --install istio-eastwestgateway ./istio-${ISTIO_VERSION}/manifests/charts/gateways/istio-ingress -n istio-gateways --values - <<EOF
 global:
-  hub: us-docker.pkg.dev/gloo-mesh/istio-workshops
-  tag: 1.13.4-solo
+  hub: ${HUB}
+  tag: ${ISTIO_VERSION}-solo
 gateways:
   istio-ingressgateway:
     name: istio-eastwestgateway
@@ -468,7 +489,7 @@ afterEach(function (done) {
 });
 
 describe("Checking Istio installation", function() {
-  let deployments = ["istiod-1-13"];
+  let deployments = ["istiod-${ISTIO_REVISION}"];
   deployments.forEach(deploy => {
     it(deploy + ' pods are ready in cluster ' + process.env.CLUSTER1, () => helpers.checkDeployment({ context: process.env.CLUSTER1, namespace: "istio-system", k8sObj: deploy }));
   });
@@ -476,7 +497,7 @@ describe("Checking Istio installation", function() {
   deployments.forEach(deploy => {
     it(deploy + ' pods are ready in cluster ' + process.env.CLUSTER1, () => helpers.checkDeployment({ context: process.env.CLUSTER1, namespace: "istio-gateways", k8sObj: deploy }));
   });
-  deployments = ["istiod-1-13"];
+  deployments = ["istiod-${ISTIO_REVISION}"];
   deployments.forEach(deploy => {
     it(deploy + ' pods are ready in cluster ' + process.env.CLUSTER2, () => helpers.checkDeployment({ context: process.env.CLUSTER2, namespace: "istio-system", k8sObj: deploy }));
   });
@@ -538,6 +559,15 @@ export HOST_GW_CLUSTER1=$(echo ${ENDPOINT_HTTP_GW_CLUSTER1} | cut -d: -f1)
 export ENDPOINT_HTTP_GW_CLUSTER2=$(kubectl --context ${CLUSTER2} -n istio-gateways get svc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].*}'):80
 export ENDPOINT_HTTPS_GW_CLUSTER2=$(kubectl --context ${CLUSTER2} -n istio-gateways get svc istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].*}'):443
 export HOST_GW_CLUSTER2=$(echo ${ENDPOINT_HTTP_GW_CLUSTER2} | cut -d: -f1)
+```
+
+```bash
+echo "ENDPOINT_HTTP_GW_CLUSTER1= ${ENDPOINT_HTTP_GW_CLUSTER1}"
+echo "ENDPOINT_HTTPS_GW_CLUSTER1= ${ENDPOINT_HTTPS_GW_CLUSTER1}"
+echo "HOST_GW_CLUSTER1= ${HOST_GW_CLUSTER1}"
+echo "ENDPOINT_HTTP_GW_CLUSTER2= ${ENDPOINT_HTTP_GW_CLUSTER2}"
+echo "ENDPOINT_HTTPS_GW_CLUSTER2= ${ENDPOINT_HTTPS_GW_CLUSTER2}"
+echo "HOST_GW_CLUSTER2= ${HOST_GW_CLUSTER2}"
 ```
 
 <!--bash
@@ -621,9 +651,9 @@ metadata:
   name: istio-cni
 EOF
 
-curl https://raw.githubusercontent.com/istio/istio/release-1.13/samples/bookinfo/platform/kube/bookinfo.yaml > bookinfo.yaml
-kubectl --context ${CLUSTER1} label namespace bookinfo-frontends istio.io/rev=1-13
-kubectl --context ${CLUSTER1} label namespace bookinfo-backends istio.io/rev=1-13
+curl "https://raw.githubusercontent.com/istio/istio/release-${ISTIO_MINOR_VERSION}/samples/bookinfo/platform/kube/bookinfo.yaml" > bookinfo.yaml
+kubectl --context ${CLUSTER1} label namespace bookinfo-frontends istio.io/rev=${ISTIO_REVISION}
+kubectl --context ${CLUSTER1} label namespace bookinfo-backends istio.io/rev=${ISTIO_REVISION}
 # deploy the frontend bookinfo service in the bookinfo-frontends namespace
 kubectl --context ${CLUSTER1} -n bookinfo-frontends apply -f bookinfo.yaml -l 'account in (productpage)'
 kubectl --context ${CLUSTER1} -n bookinfo-frontends apply -f bookinfo.yaml -l 'app in (productpage)'
@@ -680,8 +710,8 @@ metadata:
   name: istio-cni
 EOF
 
-kubectl --context ${CLUSTER2} label namespace bookinfo-frontends istio.io/rev=1-13
-kubectl --context ${CLUSTER2} label namespace bookinfo-backends istio.io/rev=1-13
+kubectl --context ${CLUSTER2} label namespace bookinfo-frontends istio.io/rev=${ISTIO_REVISION}
+kubectl --context ${CLUSTER2} label namespace bookinfo-backends istio.io/rev=${ISTIO_REVISION}
 # deploy the frontend bookinfo service in the bookinfo-frontends namespace
 kubectl --context ${CLUSTER2} -n bookinfo-frontends apply -f bookinfo.yaml -l 'account in (productpage)'
 kubectl --context ${CLUSTER2} -n bookinfo-frontends apply -f bookinfo.yaml -l 'app in (productpage)'
@@ -858,7 +888,7 @@ spec:
       labels:
         app: in-mesh
         version: v1
-        istio.io/rev: 1-13
+        istio.io/rev: ${ISTIO_REVISION}
     spec:
       serviceAccountName: in-mesh
       containers:
@@ -907,9 +937,7 @@ mocha ./test.js --timeout 5000 --retries=50 --bail 2> /dev/null || exit 1
 First of all, let's install the `meshctl` CLI:
 
 ```bash
-export GLOO_MESH_VERSION=v2.0.5
-curl -sL https://run.solo.io/meshctl/install | sh -
-export PATH=$HOME/.gloo-mesh/bin:$PATH
+export GLOO_MESH_VERSION=2.1.1
 ```
 
 Run the following commands to deploy the Gloo Mesh management plane:
@@ -947,10 +975,14 @@ mocha ./test.js --timeout 5000 --retries=50 --bail 2> /dev/null || exit 1
 ```bash
 helm repo add gloo-mesh-enterprise https://storage.googleapis.com/gloo-mesh-enterprise/gloo-mesh-enterprise 
 helm repo update
-kubectl --context ${MGMT} create ns gloo-mesh 
+kubectl --context ${MGMT} create ns gloo-mesh
+
+# TODO - Do we need this as well?
+# oc --context ${MGMT} adm policy add-scc-to-group anyuid system:serviceaccounts:gloo-mesh
+
 helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enterprise \
 --namespace gloo-mesh --kube-context ${MGMT} \
---version=2.0.5 \
+--version=${GLOO_MESH_VERSION} \
 --set glooMeshMgmtServer.ports.healthcheck=8091 \
 --set glooMeshMgmtServer.floatingUserId=true \
 --set glooMeshUi.floatingUserId=true \
@@ -958,7 +990,8 @@ helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enter
 --set prometheus.server.securityContext=false \
 --set glooMeshUi.serviceType=LoadBalancer \
 --set mgmtClusterName=${MGMT} \
---set licenseKey=${GLOO_MESH_LICENSE_KEY}
+--set licenseKey="${GLOO_MESH_LICENSE_KEY}" \
+--set global.cluster=${MGMT}
 kubectl --context ${MGMT} -n gloo-mesh rollout status deploy/gloo-mesh-mgmt-server
 ```
 <!--bash
@@ -1027,7 +1060,7 @@ kubectl apply --context ${MGMT} -f- <<EOF
 apiVersion: admin.gloo.solo.io/v2
 kind: KubernetesCluster
 metadata:
-  name: cluster1
+  name: "${CLUSTER1}"
   namespace: gloo-mesh
 spec:
   clusterDomain: cluster.local
@@ -1049,9 +1082,9 @@ helm upgrade --install gloo-mesh-agent gloo-mesh-agent/gloo-mesh-agent \
   --set relay.authority=gloo-mesh-mgmt-server.gloo-mesh \
   --set rate-limiter.enabled=false \
   --set ext-auth-service.enabled=false \
-  --set cluster=cluster1 \
+  --set cluster="${CLUSTER1}" \
   --set glooMeshAgent.floatingUserId=true \
-  --version 2.0.5
+  --version ${GLOO_MESH_VERSION}
 ```
 
 Note that the registration can also be performed using `meshctl cluster register`.
@@ -1063,7 +1096,7 @@ kubectl apply --context ${MGMT} -f- <<EOF
 apiVersion: admin.gloo.solo.io/v2
 kind: KubernetesCluster
 metadata:
-  name: cluster2
+  name: ${CLUSTER2}
   namespace: gloo-mesh
 spec:
   clusterDomain: cluster.local
@@ -1085,9 +1118,9 @@ helm upgrade --install gloo-mesh-agent gloo-mesh-agent/gloo-mesh-agent \
   --set relay.authority=gloo-mesh-mgmt-server.gloo-mesh \
   --set rate-limiter.enabled=false \
   --set ext-auth-service.enabled=false \
-  --set cluster=cluster2 \
+  --set cluster=${CLUSTER2} \
   --set glooMeshAgent.floatingUserId=true \
-  --version 2.0.5
+  --version ${GLOO_MESH_VERSION}
 ```
 
 You can check the cluster(s) have been registered correctly using the following commands:
@@ -1135,9 +1168,9 @@ First, you need to create a namespace for the addons, with Istio injection enabl
 
 ```bash
 kubectl --context ${CLUSTER1} create namespace gloo-mesh-addons
-kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=1-13
+kubectl --context ${CLUSTER1} label namespace gloo-mesh-addons istio.io/rev=${ISTIO_REVISION}
 kubectl --context ${CLUSTER2} create namespace gloo-mesh-addons
-kubectl --context ${CLUSTER2} label namespace gloo-mesh-addons istio.io/rev=1-13
+kubectl --context ${CLUSTER2} label namespace gloo-mesh-addons istio.io/rev=${ISTIO_REVISION}
 oc --context ${CLUSTER1} adm policy add-scc-to-group anyuid system:serviceaccounts:gloo-mesh-addons
 
 cat <<EOF | oc --context ${CLUSTER1} -n gloo-mesh-addons create -f -
@@ -1166,7 +1199,7 @@ helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
   --set rate-limiter.enabled=true \
   --set ext-auth-service.enabled=true \
   --set glooMeshAgent.floatingUserId=true \
-  --version 2.0.5
+  --version ${GLOO_MESH_VERSION}
 
 helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
   --namespace gloo-mesh-addons \
@@ -1175,7 +1208,7 @@ helm upgrade --install gloo-mesh-agent-addons gloo-mesh-agent/gloo-mesh-agent \
   --set rate-limiter.enabled=true \
   --set ext-auth-service.enabled=true \
   --set glooMeshAgent.floatingUserId=true \
-  --version 2.0.5
+  --version ${GLOO_MESH_VERSION}
 ```
 
 Finally, you need to specify which gateways you want to use for cross cluster traffic:
@@ -1233,14 +1266,14 @@ metadata:
   namespace: gloo-mesh
 spec:
   workloadClusters:
-  - name: mgmt
+  - name: ${MGMT}
     namespaces:
     - name: gateways-config
-  - name: cluster1
+  - name: ${CLUSTER1}
     namespaces:
     - name: istio-gateways
     - name: gloo-mesh-addons
-  - name: cluster2
+  - name: ${CLUSTER2}
     namespaces:
     - name: istio-gateways
     - name: gloo-mesh-addons
@@ -1300,14 +1333,14 @@ metadata:
     allow_ingress: "true"
 spec:
   workloadClusters:
-  - name: mgmt
+  - name: ${MGMT}
     namespaces:
     - name: bookinfo-config
-  - name: cluster1
+  - name: ${CLUSTER1}
     namespaces:
     - name: bookinfo-frontends
     - name: bookinfo-backends
-  - name: cluster2
+  - name: ${CLUSTER2}
     namespaces:
     - name: bookinfo-frontends
     - name: bookinfo-backends
@@ -1374,7 +1407,7 @@ spec:
     - selector:
         labels:
           istio: ingressgateway
-        cluster: cluster1
+        cluster: ${CLUSTER1}
   listeners: 
     - http: {}
       port:
@@ -1401,7 +1434,7 @@ spec:
   virtualGateways:
     - name: north-south-gw
       namespace: gateways-config
-      cluster: mgmt
+      cluster: ${MGMT}
   workloadSelectors: []
   http:
     - name: productpage
