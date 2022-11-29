@@ -87,14 +87,14 @@ Clone this repository and go to the `gloo-mesh-2-0-openshift` directory.
 Set the context environment variables:
 
 ```bash
-export MGMT=drew-ocp-cluster3
-export CLUSTER1=drew-ocp-cluster1
-export CLUSTER2=drew-ocp-cluster2
+export MGMT=mgmt
+export CLUSTER1=cluster1
+export CLUSTER2=cluster2
 ```
 
 > Note that in case you can't have a Kubernetes cluster dedicated for the management plane, you would set the variables like that:
 > ```
-> export MGMT=cluster1
+> export MGMT=mgmt
 > export CLUSTER1=cluster1
 > export CLUSTER2=cluster2
 > ```
