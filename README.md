@@ -977,9 +977,6 @@ helm repo add gloo-mesh-enterprise https://storage.googleapis.com/gloo-mesh-ente
 helm repo update
 kubectl --context ${MGMT} create ns gloo-mesh
 
-# TODO - Do we need this as well?
-# oc --context ${MGMT} adm policy add-scc-to-group anyuid system:serviceaccounts:gloo-mesh
-
 helm upgrade --install gloo-mesh-enterprise gloo-mesh-enterprise/gloo-mesh-enterprise \
 --namespace gloo-mesh --kube-context ${MGMT} \
 --version=${GLOO_MESH_VERSION} \
