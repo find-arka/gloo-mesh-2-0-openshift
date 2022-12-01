@@ -937,7 +937,7 @@ mocha ./test.js --timeout 5000 --retries=50 --bail 2> /dev/null || exit 1
 First of all, let's install the `meshctl` CLI:
 
 ```bash
-export GLOO_MESH_VERSION=2.1.1
+export GLOO_MESH_VERSION=2.1.0
 ```
 
 Run the following commands to deploy the Gloo Mesh management plane:
